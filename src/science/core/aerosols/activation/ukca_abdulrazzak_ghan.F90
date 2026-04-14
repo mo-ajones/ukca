@@ -182,6 +182,7 @@ REAL :: zka
 REAL :: zerf_ratio
 REAL :: zwpwdw                      !
 REAL :: zpwdw                       !
+REAL :: p_factor
 
 REAL :: zsmax(kbdim,klev)           ! maximum supersaturation
 REAL :: zsumtop(kbdim,klev)         !
@@ -389,13 +390,13 @@ END DO                    !jmod=1, topmode
 !$OMP PRIVATE(jk, jl, jmod, jw, psmax2,                                        &
 !$OMP         zalpha, zcdncm, zdif, zerf_ratio, zeta,                          &
 !$OMP         zf, zg, zgamma, zgrowth, zk, zka, zpwdw,                         &
-!$OMP         zrc, zsm, zsmax, zsum, zw, zwpwdw, zxi)                          &
+!$OMP         zrc, zsm, zsmax, zsum, zw, zwpwdw, zxi, p_factor)                &
 !$OMP SHARED(cp, cthomi, gg, kbdim, klev, lc,lc_sq, mode, nwbins, topmode,     &
 !$OMP        modesol, papm1, pesw, pn, pqm1, prdry, Printstatus,               &
 !$OMP        psmax, ptm1, pwarr, pwbin, pwpdf, rho_water, rmol,                &
 !$OMP        za, zb, zcdnc, zeps,                                              &
 !$OMP        zndbot, zndbotm, zndtop, zndtopm,                                 &
-!$OMP        zsigmaln, l_fix_ukca_hygroscopicities_local)
+!$OMP        zsigmaln, sigmag, l_fix_ukca_hygroscopicities_local)
 
 !$OMP DO SCHEDULE(DYNAMIC)
 DO jw=1, nwbins
@@ -459,10 +460,16 @@ DO jw=1, nwbins
                  zb(jl,jk,jmod)   >zeps        ) THEN
 
                ! (7):
-              zf=0.5*EXP(2.5*zsigmaln(jmod)**2)
+              !zf=0.5*EXP(2.5*zsigmaln(jmod)**2)
+              !Updated based on (ref https://doi.org/10.5194/egusphere-2024-2423)
+              zf=0.0135*EXP(2.367*sigmag(3)) ! Dependent only on accum. mode gsd.
+              ! ^ Set to index 3 for accum. mode gsd.
 
               ! (8):
-              zg=1.0+0.25*zsigmaln(jmod)
+              !zg=1.0+0.25*zsigmaln(jmod)
+              !Updated based on (ref https://doi.org/10.5194/egusphere-2024-2423)
+              zg=1.1058-0.315*sigmag(3) ! Dependent only on accum. mode gsd.
+              ! ^ Set to index 3 for accum. mode gsd.
 
               ! (10):
               zxi=2.0*za(jl,jk,jmod)/3.0 *                                     &
@@ -478,8 +485,17 @@ DO jw=1, nwbins
                    (3.0*prdry(jl,jk,jmod)))**1.5
 
               ! (6):
+
+              ! New p factor calc. based on (ref https://doi.org/10.5194/egusphere-2024-2423)
+              IF ((zxi/zeta) .gt. 1) THEN
+                 p_factor = -0.5073+1.5088*sigmag(3)-(0.3699*(sigmag(3))**2) ! Dependent only on accum. mode gsd.
+                 ! ^ Set to index 3 for accum. mode gsd.
+              ELSEIF ((zxi/zeta) .le. 1) THEN
+                 p_factor = 1.5
+              ENDIF
+
               zsum=zsum + (1.0/zsm(jl,jk,jmod)**2 *                            &
-                   ( zf*(zxi/zeta)**1.5 +                                      &
+                   ( zf*(zxi/zeta)**p_factor +                                 &
                    zg*(zsm(jl,jk,jmod)**2/                                     &
                    (zeta+3.0*zxi))**0.75) )
             END IF
